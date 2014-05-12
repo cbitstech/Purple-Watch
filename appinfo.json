@@ -1,0 +1,17 @@
+{
+  "uuid": "3cab0453-ff04-4594-8223-fa357112c305",
+  "shortName": "Purple Watch",
+  "longName": "Purple Watch",
+  "companyName": "Chris Karr",
+  "versionCode": 1,
+  "versionLabel": "1.0.0",
+  "watchapp": {
+    "watchface": true
+  },
+  "appKeys": {
+    "dummy": 0
+  },
+  "resources": {
+    "media": []
+  }
+}
