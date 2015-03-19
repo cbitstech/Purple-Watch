@@ -296,26 +296,35 @@ Commented out to make space for error report...
 
 // Start error report
 
+	GRect status_icon_box;
+	status_icon_box.size.w = 26;
+	status_icon_box.size.h = bar_height;
+	status_icon_box.origin.x = x_center - 14;
+	status_icon_box.origin.y = top + 1;
+
 	GRect status_box;
-	status_box.size.w = max_bar_width + 26;
+	status_box.size.w = max_bar_width + 4;
 	status_box.size.h = bar_height;
-	status_box.origin.x = x_center - 14;
+	status_box.origin.x = max_bar_width + 28;
 	status_box.origin.y = top + 1;
 
 	char * state_label = malloc(sizeof(char) * 32);
 
 	struct tm * change = localtime(&state_changed);
 
+	strftime(state_label, 32, "%m.%d %R", change);
+
 	if (status == DATA_LOGGING_SUCCESS)
-		strftime(state_label, 32, "%m/%d %R  :)", change);
+		graphics_draw_text(ctx, ":)", labelFont, status_icon_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 	else if (status == DATA_LOGGING_BUSY)
-		strftime(state_label, 32, "%m/%d %R  :|", change);
+		graphics_draw_text(ctx, ":|", labelFont, status_icon_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 	else
-		strftime(state_label, 32, "%m/%d %R  :(", change);
+		graphics_draw_text(ctx, ":(", labelFont, status_icon_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
 		
-	graphics_draw_text(ctx, state_label, labelFont, status_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+	graphics_draw_text(ctx, state_label, labelFont, status_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentLeft, NULL);
 	
 	free(state_label);
+
 
 // End error report
 	
@@ -366,8 +375,9 @@ void accel_data_handler(AccelData *data, uint32_t num_samples)
 {
 	if (data == NULL)
 		APP_LOG(APP_LOG_LEVEL_DEBUG, "NULL data");
-
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "+ %d", (int) num_samples);
+	
+	if (num_samples == 0)
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "NUM SAMPLES %d", (int) num_samples);
 
 	counter = counter + 1;
 
@@ -391,7 +401,9 @@ void accel_data_handler(AccelData *data, uint32_t num_samples)
 	}
 
 	if (status == DATA_LOGGING_SUCCESS)
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "DATA_LOGGING_SUCCESS");
+	{
+		// APP_LOG(APP_LOG_LEVEL_DEBUG, "DATA_LOGGING_SUCCESS");
+	}
 	else if (status == DATA_LOGGING_BUSY)
 		APP_LOG(APP_LOG_LEVEL_DEBUG, "DATA_LOGGING_BUSY");
 	else if (status == DATA_LOGGING_FULL)
@@ -407,7 +419,7 @@ void accel_data_handler(AccelData *data, uint32_t num_samples)
 	{
 		data_logging_finish(log_session);
 
-		APP_LOG(APP_LOG_LEVEL_DEBUG, "logged");
+		// APP_LOG(APP_LOG_LEVEL_DEBUG, "logged");
 
 		log_session = data_logging_create(CHANNEL, DATA_LOGGING_BYTE_ARRAY, sizeof(AccelData), true);
 	}
@@ -423,7 +435,7 @@ void accel_data_handler(AccelData *data, uint32_t num_samples)
 		z_average += data[i].z;
 	}
 	
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "observed %d %d %d (%d)", (int) x_average, (int) y_average, (int) z_average, (int) (counter % 100));
+	// APP_LOG(APP_LOG_LEVEL_DEBUG, "observed %d %d %d (%d)", (int) x_average, (int) y_average, (int) z_average, (int) (counter % 100));
 
 	x_average = x_average / (int32_t) num_samples;
 	y_average = y_average / (int32_t) num_samples;
