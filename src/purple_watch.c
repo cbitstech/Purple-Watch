@@ -6,7 +6,7 @@ static GRect window_frame;
 
 static Layer *bars_layer;
 
-// static DataLoggingSessionRef log_session;
+static DataLoggingSessionRef log_session;
 
 static int32_t ACCEL_MAX = 1000;
 
@@ -15,8 +15,14 @@ static int32_t y_average = 0;
 static int32_t z_average = 0;
 
 static bool is_drawing = false;
+static bool xmit = false;
 
 static uint counter = 0;
+
+static DataLoggingResult status = DATA_LOGGING_CLOSED;
+static time_t state_changed = 0;
+
+int CHANNEL = 1234;
 
 /**
  * \brief    Fast Square root algorithm
@@ -91,7 +97,6 @@ static char * create_label(int32_t average)
 
 	return label;
 }
-
 
 static void bars_layer_update_callback(Layer *me, GContext *ctx) 
 {
@@ -261,6 +266,9 @@ static void bars_layer_update_callback(Layer *me, GContext *ctx)
 	
 	top += bar_height;
 	
+/*	
+Commented out to make space for error report...
+
 	int32_t remainder = (int32_t) square_root((x_average*x_average) + (y_average*y_average) + (z_average*z_average));
 	remainder = remainder - 1000;
 	
@@ -284,7 +292,35 @@ static void bars_layer_update_callback(Layer *me, GContext *ctx)
 	char * label = create_label(remainder);
 		
 	graphics_draw_text(ctx, label, labelFont, text_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+*/	
+
+// Start error report
+
+	GRect status_box;
+	status_box.size.w = max_bar_width + 26;
+	status_box.size.h = bar_height;
+	status_box.origin.x = x_center - 14;
+	status_box.origin.y = top + 1;
+
+	char * state_label = malloc(sizeof(char) * 32);
+
+	struct tm * change = localtime(&state_changed);
+
+	if (status == DATA_LOGGING_SUCCESS)
+		strftime(state_label, 32, "%m/%d %R  :)", change);
+	else if (status == DATA_LOGGING_BUSY)
+		strftime(state_label, 32, "%m/%d %R  :|", change);
+	else
+		strftime(state_label, 32, "%m/%d %R  :(", change);
 		
+	graphics_draw_text(ctx, state_label, labelFont, status_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+	
+	free(state_label);
+
+// End error report
+	
+	char * battery_label = malloc(sizeof(char) * 32);
+	
 	GRect battery_box;
 	battery_box.size.w = max_bar_width;
 	battery_box.size.h = bar_height;
@@ -294,17 +330,17 @@ static void bars_layer_update_callback(Layer *me, GContext *ctx)
 	BatteryChargeState charge = battery_state_service_peek();
 	
 	if (charge.is_charging && charge.is_plugged)
-		snprintf(label, 32, "%d%% (C/P)", charge.charge_percent);
+		snprintf(battery_label, 32, "%d%% (C/P)", charge.charge_percent);
 	else if (charge.is_plugged)
-		snprintf(label, 32, "%d%% (P)", charge.charge_percent);
+		snprintf(battery_label, 32, "%d%% (P)", charge.charge_percent);
 	else if (charge.is_charging)
-		snprintf(label, 32, "%d%% (C)", charge.charge_percent);
+		snprintf(battery_label, 32, "%d%% (C)", charge.charge_percent);
 	else
-		snprintf(label, 32, "%d%%", charge.charge_percent);
+		snprintf(battery_label, 32, "%d%%", charge.charge_percent);
 
-	graphics_draw_text(ctx, label, labelFont, battery_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
+	graphics_draw_text(ctx, battery_label, labelFont, battery_box, GTextOverflowModeTrailingEllipsis, GTextAlignmentRight, NULL);
 	
-	free(label);
+	free(battery_label);
 	
 	is_drawing = false;
 }
@@ -328,8 +364,54 @@ static void window_unload(Window *window)
 
 void accel_data_handler(AccelData *data, uint32_t num_samples) 
 {
-//	data_logging_log(log_session, data, num_samples);
+	if (data == NULL)
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "NULL data");
+
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "+ %d", (int) num_samples);
+
+	counter = counter + 1;
+
+	DataLoggingResult new_status = data_logging_log(log_session, data, num_samples);
 	
+	if (new_status != status)
+	{
+		if (status == DATA_LOGGING_SUCCESS && new_status == DATA_LOGGING_BUSY)
+		{
+			// Do nothing...
+		}
+		else if (status == DATA_LOGGING_BUSY && new_status == DATA_LOGGING_SUCCESS)
+		{
+			// Do nothing...
+		}
+		else
+		{
+			state_changed = time(NULL);
+			status = new_status;
+		}
+	}
+
+	if (status == DATA_LOGGING_SUCCESS)
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "DATA_LOGGING_SUCCESS");
+	else if (status == DATA_LOGGING_BUSY)
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "DATA_LOGGING_BUSY");
+	else if (status == DATA_LOGGING_FULL)
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "DATA_LOGGING_FULL");
+	else if (status == DATA_LOGGING_NOT_FOUND)
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "DATA_LOGGING_NOT_FOUND");
+	else if (status == DATA_LOGGING_CLOSED)
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "DATA_LOGGING_CLOSED");
+	else if (status == DATA_LOGGING_INVALID_PARAMS)
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "DATA_LOGGING_INVALID_PARAMS");
+
+	if (counter % 5 == 0)
+	{
+		data_logging_finish(log_session);
+
+		APP_LOG(APP_LOG_LEVEL_DEBUG, "logged");
+
+		log_session = data_logging_create(CHANNEL, DATA_LOGGING_BYTE_ARRAY, sizeof(AccelData), true);
+	}
+
 	x_average = 0;
 	y_average = 0;
 	z_average = 0;
@@ -340,6 +422,8 @@ void accel_data_handler(AccelData *data, uint32_t num_samples)
 		y_average += data[i].y;
 		z_average += data[i].z;
 	}
+	
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "observed %d %d %d (%d)", (int) x_average, (int) y_average, (int) z_average, (int) (counter % 100));
 
 	x_average = x_average / (int32_t) num_samples;
 	y_average = y_average / (int32_t) num_samples;
@@ -347,8 +431,6 @@ void accel_data_handler(AccelData *data, uint32_t num_samples)
 
 	if (counter % 4 == 0)
 		layer_mark_dirty(bars_layer);
-		
-	counter += 1;
 }
 
 static void init(void) 
@@ -362,17 +444,17 @@ static void init(void)
 	window_stack_push(window, true /* Animated */);
 	window_set_background_color(window, GColorBlack);
 
-//	log_session = data_logging_create(0x7654, DATA_LOGGING_BYTE_ARRAY, sizeof(AccelData), true);
+	log_session = data_logging_create(CHANNEL, DATA_LOGGING_BYTE_ARRAY, sizeof(AccelData), true);
 
-	accel_data_service_subscribe(25, &accel_data_handler);
-	accel_service_set_sampling_rate(ACCEL_SAMPLING_100HZ);
+	accel_data_service_subscribe(10, &accel_data_handler);
+	accel_service_set_sampling_rate(ACCEL_SAMPLING_10HZ);
 }
 
 static void deinit(void) 
 {
 	accel_data_service_unsubscribe();
 
-//	data_logging_finish(log_session);
+	data_logging_finish(log_session);
 
 	window_destroy(window);
 }

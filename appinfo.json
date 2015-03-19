@@ -4,12 +4,11 @@
   "longName": "Purple Watch",
   "companyName": "CBITs",
   "versionCode": 1,
-  "versionLabel": "1.0.0",
+  "versionLabel": "1.0",
   "watchapp": {
     "watchface": true
   },
   "appKeys": {
-    "dummy": 0
   },
   "resources": {
     "media": []
