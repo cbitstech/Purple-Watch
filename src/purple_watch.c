@@ -15,7 +15,7 @@ static int32_t y_average = 0;
 static int32_t z_average = 0;
 
 static bool is_drawing = false;
-static bool xmit = false;
+static bool is_sending = false;
 
 static uint counter = 0;
 
@@ -354,6 +354,78 @@ Commented out to make space for error report...
 	is_drawing = false;
 }
 
+static void xmit_battery()
+{
+	if (is_sending)
+		return;
+		
+	is_sending = true;
+	
+	Tuplet command = TupletInteger(0x00, 0x01);
+	
+	BatteryChargeState charge = battery_state_service_peek();
+				
+	uint8_t battery_byte = (uint8_t) charge.charge_percent;
+
+	if (charge.is_plugged)
+		battery_byte |= 0x80;
+	
+	Tuplet value = TupletBytes(0x01, (uint8_t *) &battery_byte, sizeof(uint8_t));
+
+	DictionaryIterator * iter = NULL;
+	app_message_outbox_begin(&iter);
+
+	if (iter == NULL)
+		APP_LOG(APP_LOG_LEVEL_ERROR, "Error creating DictionaryIterator.");
+	else
+	{
+		dict_write_tuplet(iter, &command);
+		dict_write_tuplet(iter, &value);
+			
+		dict_write_end(iter);
+			
+		AppMessageResult result = app_message_outbox_send();
+			
+		if (result != APP_MSG_OK)
+			APP_LOG(APP_LOG_LEVEL_ERROR, "Error transmitting battery.");
+	}
+
+	is_sending = false;
+}
+
+static void inbox_received_callback(DictionaryIterator *iterator, void *context) 
+{
+	Tuple *t = dict_read_first(iterator);
+	
+	while (t != NULL) 
+	{
+		switch (t->key) 
+		{
+			case 0:
+				xmit_battery();
+				
+				break;
+		}
+
+		t = dict_read_next(iterator);
+	}
+}
+
+static void inbox_dropped_callback(AppMessageResult reason, void *context) 
+{
+	APP_LOG(APP_LOG_LEVEL_ERROR, "Inbox dropped callback! %d", reason);
+}
+
+static void outbox_failed_callback(DictionaryIterator *iterator, AppMessageResult reason, void *context) 
+{
+	APP_LOG(APP_LOG_LEVEL_ERROR, "Outbox send failed! %d", reason);
+}
+
+static void outbox_sent_callback(DictionaryIterator *iterator, void *context) 
+{
+
+}
+
 static void window_load(Window *window) 
 {
 	Layer *window_layer = window_get_root_layer(window);
@@ -457,6 +529,13 @@ static void init(void)
 	window_set_background_color(window, GColorBlack);
 
 	log_session = data_logging_create(CHANNEL, DATA_LOGGING_BYTE_ARRAY, sizeof(AccelData), true);
+
+	app_message_register_inbox_received(inbox_received_callback);
+	app_message_register_inbox_dropped(inbox_dropped_callback);
+	app_message_register_outbox_failed(outbox_failed_callback);
+	app_message_register_outbox_sent(outbox_sent_callback);
+	
+	app_message_open(app_message_inbox_size_maximum(), app_message_outbox_size_maximum());
 
 	accel_data_service_subscribe(10, &accel_data_handler);
 	accel_service_set_sampling_rate(ACCEL_SAMPLING_10HZ);

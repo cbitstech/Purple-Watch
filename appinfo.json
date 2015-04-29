@@ -3,14 +3,18 @@
   "shortName": "Purple Watch",
   "longName": "Purple Watch",
   "companyName": "CBITs",
-  "versionCode": 1,
-  "versionLabel": "1.0",
+  "versionCode": 2,
+  "versionLabel": "1.1",
   "watchapp": {
     "watchface": true
   },
-  "appKeys": {
-  },
+  "appKeys": {},
   "resources": {
     "media": []
-  }
+  },
+  "targetPlatforms": [
+    "aplite",
+    "basalt"
+  ],
+  "sdkVersion": "3"
 }
